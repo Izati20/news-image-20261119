@@ -15,7 +15,8 @@
 //   node main.ts                                  (writes /output/entry.png)
 //   MAKEFUN_OUTPUT_DIR=out node main.ts           (writes out/entry.png)
 
-import { copyFileSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { createHash } from 'node:crypto';
+import { copyFileSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 const MAX_BYTES = 1_048_576; // the gate's 1 MiB ceiling
@@ -49,9 +50,11 @@ const destination = join(outputDir, 'entry.png');
 copyFileSync(sourcePath, destination);
 
 // The two grader runs must agree exactly, so prove the copy landed whole:
-// same length, and still a PNG that passes the same inspection.
-const delivered = statSync(destination).size;
-if (delivered !== sourceBytes.length) {
-  throw new Error(`copy mismatch: wrote ${delivered} of ${sourceBytes.length} bytes`);
+// hash both byte strings with SHA-256 and compare the digests — a stronger
+// guarantee than comparing lengths, which two different files can share.
+const digest = (bytes) => createHash('sha256').update(bytes).digest('hex');
+const deliveredBytes = readFileSync(destination);
+if (digest(deliveredBytes) !== digest(sourceBytes)) {
+  throw new Error('copy mismatch: /output/entry.png differs from the bundled entry.png');
 }
-inspectPng(readFileSync(destination));
+inspectPng(deliveredBytes);
